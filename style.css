@@ -908,3 +908,13 @@ body {
   }
 }
 
+
+.auth-card {
+    max-width: 400px;
+    margin-top: 10vh;
+}
+.auth-footer {
+    display: flex;
+    justify-content: center;
+}
+

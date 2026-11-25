@@ -7,6 +7,38 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- Màn hình Đăng nhập/Đăng ký -->
+    <div id="auth-shell" class="app-shell">
+        <div class="todo-card auth-card">
+            <header class="card-header">
+                <h1>Chào mừng trở lại</h1>
+                <p class="subtitle">Đăng nhập để quản lý công việc bảo mật</p>
+            </header>
+            <section class="composer-section">
+                <form id="auth-form" class="todo-form">
+                    <div class="input-group">
+                        <input type="text" id="username-input" class="todo-input" placeholder="Tên đăng nhập" required>
+                    </div>
+                    <div class="input-group">
+                        <input type="password" id="password-input" class="todo-input" placeholder="Mật khẩu" required>
+                    </div>
+                    <div id="auth-error" class="form-error" style="display:none;"></div>
+                    <button type="submit" id="auth-submit-btn" class="btn btn-primary">Đăng nhập</button>
+                </form>
+                <div class="auth-footer" style="margin-top: 15px;">
+                    <button id="toggle-auth-mode" class="btn btn-ghost-danger btn-sm">Chưa có tài khoản? Đăng ký</button>
+                </div>
+            </section>
+        </div>
+    </div>
+                    <div class="header-actions">
+                        <span id="current-user-badge" style="font-size: 0.8rem; color: var(--text-secondary); margin-right: 10px;"></span>
+                        <button id="logout-btn" class="btn btn-outline btn-sm">Đăng xuất</button>
+
+
+    <!-- Ứng dụng chính (Ẩn mặc định) -->
+    <div id="app-shell" class="app-shell" style="display: none;">
+
     <div class="app-shell">
         <div class="todo-card">
             <header class="card-header">
@@ -97,3 +129,4 @@
     <script src="app.js"></script>
 </body>
 </html>
+    </div>
