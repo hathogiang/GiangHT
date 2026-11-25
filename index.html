@@ -7,49 +7,38 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- Màn hình Đăng nhập/Đăng ký -->
     <div id="auth-shell" class="app-shell">
         <div class="todo-card auth-card">
             <header class="card-header">
                 <h1>Chào mừng trở lại</h1>
-                <p class="subtitle">Đăng nhập để quản lý công việc bảo mật</p>
+                <p class="subtitle">Đăng nhập để quản lý công việc của bạn</p>
             </header>
             <section class="composer-section">
                 <form id="auth-form" class="todo-form">
                     <div class="input-group">
-                        <input type="text" id="username-input" class="todo-input" placeholder="Tên đăng nhập" required>
+                        <input type="text" id="username-input" class="todo-input" placeholder="Tên đăng nhập" required autocomplete="username">
                     </div>
-                    <div class="input-group">
-                        <input type="password" id="password-input" class="todo-input" placeholder="Mật khẩu" required>
-                    </div>
-                    <div id="auth-error" class="form-error" style="display:none;"></div>
                     <button type="submit" id="auth-submit-btn" class="btn btn-primary">Đăng nhập</button>
                 </form>
                 <div class="auth-footer" style="margin-top: 15px;">
-                    <button id="toggle-auth-mode" class="btn btn-ghost-danger btn-sm">Chưa có tài khoản? Đăng ký</button>
+                    <button type="button" id="toggle-auth-mode" class="btn btn-ghost-danger btn-sm">Chưa có tài khoản? Đăng ký</button>
                 </div>
             </section>
         </div>
     </div>
-                    <div class="header-actions">
-                        <span id="current-user-badge" style="font-size: 0.8rem; color: var(--text-secondary); margin-right: 10px;"></span>
-                        <button id="logout-btn" class="btn btn-outline btn-sm">Đăng xuất</button>
 
-
-    <!-- Ứng dụng chính (Ẩn mặc định) -->
     <div id="app-shell" class="app-shell" style="display: none;">
-
-    <div class="app-shell">
         <div class="todo-card">
             <header class="card-header">
                 <div class="header-top">
                     <div>
-                        <span class="badge-eyebrow" id="today-date">Thứ Hai, 25 Tháng 11</span>
+                        <span class="badge-eyebrow">Danh sách cá nhân</span>
                         <h1>Công việc của tôi</h1>
                         <p class="subtitle">Quản lý hiệu quả mỗi ngày</p>
                     </div>
                     <div class="header-actions">
-                        <button id="theme-toggle" class="theme-toggle-btn" title="Chuyển chế độ sáng/tối">🌓</button>
+                        <span id="current-user-badge" style="font-size: 0.8rem; color: var(--text-secondary); margin-right: 10px;"></span>
+                        <button type="button" id="logout-btn" class="btn btn-outline btn-sm">Đăng xuất</button>
                         <div class="progress-ring-box">
                             <span class="progress-percent" id="progress-percent">0%</span>
                             <span class="progress-label">Hoàn thành</span>
@@ -72,7 +61,7 @@
                     </div>
                     <div class="composer-meta">
                         <div class="meta-field">
-                            <label>Ưu tiên:</label>
+                            <label for="priority-input">Ưu tiên:</label>
                             <select id="priority-input">
                                 <option value="low">Thấp</option>
                                 <option value="medium" selected>Trung bình</option>
@@ -80,12 +69,11 @@
                             </select>
                         </div>
                         <div class="meta-field">
-                            <label>Hạn chót:</label>
+                            <label for="due-date-input">Hạn chót:</label>
                             <input type="date" id="due-date-input">
                         </div>
                     </div>
                 </form>
-                <div id="form-error" class="form-error" style="display:none;"></div>
             </section>
 
             <section class="toolbar-section">
@@ -103,17 +91,11 @@
                 </div>
                 <div class="filter-bar">
                     <div class="filter-tabs">
-                        <button class="filter-tab is-active" data-filter="all">Tất cả</button>
-                        <button class="filter-tab" data-filter="active">Đang làm</button>
-                        <button class="filter-tab" data-filter="completed">Đã xong</button>
-                    </div>
-                    <div class="toolbar-actions">
-                        <button id="import-btn" class="btn btn-outline btn-sm">Nhập JSON</button>
-                        <button id="export-btn" class="btn btn-outline btn-sm">Xuất JSON</button>
-                        <button id="clear-done-btn" class="btn btn-ghost-danger btn-sm">Xóa đã xong</button>
+                        <button type="button" class="filter-tab is-active" data-filter="all">Tất cả</button>
+                        <button type="button" class="filter-tab" data-filter="active">Đang làm</button>
+                        <button type="button" class="filter-tab" data-filter="completed">Đã xong</button>
                     </div>
                 </div>
-                <input type="file" id="file-input" style="display:none;" accept=".json">
             </section>
 
             <main class="list-section">
@@ -129,4 +111,3 @@
     <script src="app.js"></script>
 </body>
 </html>
-    </div>
