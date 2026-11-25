@@ -213,7 +213,7 @@ body {
 .stats-row {
   margin-top: 16px;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -236,6 +236,19 @@ body {
   font-size: 0.95rem;
   font-weight: 700;
   color: var(--text-primary);
+}
+
+.stat-pill-high {
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.stat-pill-today {
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.stat-pill-overdue {
+  border-color: rgba(239, 68, 68, 0.55);
+  background: var(--danger-soft);
 }
 
 /* Composer */
@@ -585,6 +598,11 @@ body {
   opacity: 0.78;
 }
 
+.todo-item.is-overdue {
+  border-color: rgba(239, 68, 68, 0.6);
+  background: var(--danger-soft);
+}
+
 
 .todo-main {
   display: flex;
@@ -710,6 +728,27 @@ body {
 .due-badge.is-overdue {
   color: var(--danger);
   font-weight: 600;
+}
+
+.due-badge.is-today {
+  color: #b45309;
+  font-weight: 700;
+}
+
+.due-badge.is-upcoming {
+  color: var(--text-secondary);
+}
+
+.due-badge.is-completed {
+  color: var(--text-muted);
+}
+
+.filter-tab-high.is-active {
+  color: #b91c1c;
+}
+
+.filter-tab-overdue.is-active {
+  color: var(--danger);
 }
 
 /* Item actions */

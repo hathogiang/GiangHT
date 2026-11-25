@@ -55,6 +55,16 @@ function getUsers() {
     }
 }
 
+async function hashPassword(password, salt) {
+    const data = new TextEncoder().encode(`${salt}:${password}`);
+    const digest = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function createSalt() {
+    return Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
     authForm.addEventListener('submit', handleAuth);
@@ -106,11 +116,12 @@ function startSession(username) {
 }
 
 // --- Authentication ---
-function handleAuth(event) {
+async function handleAuth(event) {
     event.preventDefault();
 
     const username = document.getElementById('username-input').value.trim();
-    if (!username) return;
+    const password = document.getElementById('password-input').value;
+    if (!username || !password) return;
 
     const users = getUsers();
     if (authMode === 'register') {
@@ -119,7 +130,12 @@ function handleAuth(event) {
             return;
         }
 
-        users[username] = { createdAt: new Date().toISOString() };
+        const salt = createSalt();
+        users[username] = {
+            createdAt: new Date().toISOString(),
+            salt,
+            passwordHash: await hashPassword(password, salt)
+        };
         localStorage.setItem(USERS_KEY, JSON.stringify(users));
         startSession(username);
         return;
@@ -127,6 +143,23 @@ function handleAuth(event) {
 
     if (!users[username]) {
         alert('Tên đăng nhập không tồn tại. Hãy đăng ký tài khoản trước.');
+        return;
+    }
+
+    // Tài khoản tạo bởi bản trước chưa có mật khẩu: thiết lập mật khẩu ở lần đăng nhập đầu tiên.
+    if (!users[username].passwordHash) {
+        const salt = createSalt();
+        users[username].salt = salt;
+        users[username].passwordHash = await hashPassword(password, salt);
+        localStorage.setItem(USERS_KEY, JSON.stringify(users));
+        alert('Mật khẩu cho tài khoản cũ đã được thiết lập.');
+        startSession(username);
+        return;
+    }
+
+    const passwordHash = await hashPassword(password, users[username].salt);
+    if (passwordHash !== users[username].passwordHash) {
+        alert('Sai mật khẩu!');
         return;
     }
 
@@ -176,15 +209,15 @@ function getVisibleTodos() {
 
     return todos
         .filter((todo) => {
-            const matchesFilter = activeFilter === 'all'
-                || (activeFilter === 'completed' ? todo.completed : !todo.completed);
+            const matchesFilter = matchesActiveFilter(todo);
             const matchesSearch = !query || todo.text.toLocaleLowerCase('vi').includes(query);
             return matchesFilter && matchesSearch;
         })
         .slice()
         .sort((first, second) => {
             if (sortSelect.value === 'priority') {
-                return priorityRank[first.priority] - priorityRank[second.priority];
+                return (priorityRank[first.priority] ?? priorityRank.medium)
+                    - (priorityRank[second.priority] ?? priorityRank.medium);
             }
             if (sortSelect.value === 'due-date') {
                 return (first.dueDate || '9999-12-31').localeCompare(second.dueDate || '9999-12-31');
@@ -196,13 +229,67 @@ function getVisibleTodos() {
         });
 }
 
+function matchesActiveFilter(todo) {
+    if (activeFilter === 'all') return true;
+    if (activeFilter === 'completed') return todo.completed;
+    if (activeFilter === 'active') return !todo.completed;
+    if (activeFilter === 'overdue') return isOverdue(todo);
+    if (activeFilter === 'high') return !todo.completed && todo.priority === 'high';
+    return true;
+}
+
+function getStartOfToday() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+}
+
+function getDueDateValue(dueDate) {
+    if (!dueDate) return null;
+
+    const date = new Date(`${dueDate}T00:00:00`);
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getDaysUntilDue(dueDate) {
+    const due = getDueDateValue(dueDate);
+    if (!due) return null;
+
+    return Math.round((due - getStartOfToday()) / 86_400_000);
+}
+
+function isOverdue(todo) {
+    const daysUntilDue = getDaysUntilDue(todo.dueDate);
+    return !todo.completed && daysUntilDue !== null && daysUntilDue < 0;
+}
+
+function getDeadlineDetails(todo) {
+    const daysUntilDue = getDaysUntilDue(todo.dueDate);
+    if (daysUntilDue === null) return null;
+
+    const dateLabel = new Intl.DateTimeFormat('vi-VN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+    }).format(getDueDateValue(todo.dueDate));
+
+    if (todo.completed) return { label: `Hạn: ${dateLabel}`, status: 'completed' };
+    if (daysUntilDue < 0) {
+        const daysOverdue = Math.abs(daysUntilDue);
+        return { label: `Quá hạn ${daysOverdue} ngày`, status: 'overdue' };
+    }
+    if (daysUntilDue === 0) return { label: 'Hạn hôm nay', status: 'today' };
+    if (daysUntilDue === 1) return { label: 'Hạn ngày mai', status: 'upcoming' };
+    return { label: `Còn ${daysUntilDue} ngày · ${dateLabel}`, status: 'upcoming' };
+}
+
 function renderTodos() {
     const visibleTodos = getVisibleTodos();
     todoList.replaceChildren();
 
     visibleTodos.forEach((todo) => {
         const item = document.createElement('li');
-        item.className = `todo-item${todo.completed ? ' is-completed' : ''}`;
+        item.className = `todo-item${todo.completed ? ' is-completed' : ''}${isOverdue(todo) ? ' is-overdue' : ''}`;
 
         const main = document.createElement('div');
         main.className = 'todo-main';
@@ -234,10 +321,14 @@ function renderTodos() {
         meta.append(priority);
 
         if (todo.dueDate) {
-            const dueDate = document.createElement('span');
-            dueDate.className = 'due-badge';
-            dueDate.textContent = `Hạn: ${todo.dueDate}`;
-            meta.append(dueDate);
+            const deadline = getDeadlineDetails(todo);
+            if (deadline) {
+                const dueDate = document.createElement('span');
+                dueDate.className = `due-badge is-${deadline.status}`;
+                dueDate.textContent = `📅 ${deadline.label}`;
+                dueDate.title = `Hạn chót: ${todo.dueDate}`;
+                meta.append(dueDate);
+            }
         }
 
         content.append(meta);
@@ -265,11 +356,17 @@ function updateStatistics() {
     const total = todos.length;
     const completed = todos.filter((todo) => todo.completed).length;
     const active = total - completed;
+    const highPriority = todos.filter((todo) => !todo.completed && todo.priority === 'high').length;
+    const dueToday = todos.filter((todo) => !todo.completed && getDaysUntilDue(todo.dueDate) === 0).length;
+    const overdue = todos.filter(isOverdue).length;
     const percentage = total ? Math.round((completed / total) * 100) : 0;
 
     document.getElementById('stat-total').textContent = total;
     document.getElementById('stat-active').textContent = active;
     document.getElementById('stat-done').textContent = completed;
+    document.getElementById('stat-high').textContent = highPriority;
+    document.getElementById('stat-today').textContent = dueToday;
+    document.getElementById('stat-overdue').textContent = overdue;
     document.getElementById('progress-percent').textContent = `${percentage}%`;
     document.getElementById('progress-fill').style.width = `${percentage}%`;
 }
