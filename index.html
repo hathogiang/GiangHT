@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>To-Do List Hiện Đại</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-shell">
+        <div class="todo-card">
+            <header class="card-header">
+                <div class="header-top">
+                    <div>
+                        <span class="badge-eyebrow" id="today-date">Thứ Hai, 25 Tháng 11</span>
+                        <h1>Công việc của tôi</h1>
+                        <p class="subtitle">Quản lý hiệu quả mỗi ngày</p>
+                    </div>
+                    <div class="header-actions">
+                        <button id="theme-toggle" class="theme-toggle-btn" title="Chuyển chế độ sáng/tối">🌓</button>
+                        <div class="progress-ring-box">
+                            <span class="progress-percent" id="progress-percent">0%</span>
+                            <span class="progress-label">Hoàn thành</span>
+                            <div class="progress-track"><div id="progress-fill" class="progress-fill" style="width: 0%"></div></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="stats-row">
+                    <div class="stat-pill"><span class="stat-label">Tổng</span><span class="stat-value" id="stat-total">0</span></div>
+                    <div class="stat-pill"><span class="stat-label">Đang làm</span><span class="stat-value" id="stat-active">0</span></div>
+                    <div class="stat-pill"><span class="stat-label">Đã xong</span><span class="stat-value" id="stat-done">0</span></div>
+                </div>
+            </header>
+
+            <section class="composer-section">
+                <form id="todo-form" class="todo-form">
+                    <div class="input-group">
+                        <input type="text" id="todo-input" class="todo-input" placeholder="Bạn cần làm gì tiếp theo?" required>
+                        <button type="submit" class="btn btn-primary">Thêm</button>
+                    </div>
+                    <div class="composer-meta">
+                        <div class="meta-field">
+                            <label>Ưu tiên:</label>
+                            <select id="priority-input">
+                                <option value="low">Thấp</option>
+                                <option value="medium" selected>Trung bình</option>
+                                <option value="high">Cao</option>
+                            </select>
+                        </div>
+                        <div class="meta-field">
+                            <label>Hạn chót:</label>
+                            <input type="date" id="due-date-input">
+                        </div>
+                    </div>
+                </form>
+                <div id="form-error" class="form-error" style="display:none;"></div>
+            </section>
+
+            <section class="toolbar-section">
+                <div class="search-sort-row">
+                    <div class="search-box">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="search-input" class="search-input" placeholder="Tìm kiếm công việc...">
+                    </div>
+                    <select id="sort-select" class="sort-select">
+                        <option value="manual">Sắp xếp thủ công</option>
+                        <option value="priority">Ưu tiên (Cao → Thấp)</option>
+                        <option value="due-date">Hạn chót (Gần nhất)</option>
+                        <option value="newest">Mới nhất</option>
+                    </select>
+                </div>
+                <div class="filter-bar">
+                    <div class="filter-tabs">
+                        <button class="filter-tab is-active" data-filter="all">Tất cả</button>
+                        <button class="filter-tab" data-filter="active">Đang làm</button>
+                        <button class="filter-tab" data-filter="completed">Đã xong</button>
+                    </div>
+                    <div class="toolbar-actions">
+                        <button id="import-btn" class="btn btn-outline btn-sm">Nhập JSON</button>
+                        <button id="export-btn" class="btn btn-outline btn-sm">Xuất JSON</button>
+                        <button id="clear-done-btn" class="btn btn-ghost-danger btn-sm">Xóa đã xong</button>
+                    </div>
+                </div>
+                <input type="file" id="file-input" style="display:none;" accept=".json">
+            </section>
+
+            <main class="list-section">
+                <ul id="todo-list" class="todo-list"></ul>
+                <div id="empty-state" class="empty-state">
+                    <div class="empty-illustration">✨</div>
+                    <h2>Chưa có công việc nào</h2>
+                    <p>Hãy thêm công việc đầu tiên của bạn ở trên!</p>
+                </div>
+            </main>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
