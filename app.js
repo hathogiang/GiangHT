@@ -15,6 +15,7 @@ const authForm = document.getElementById('auth-form');
 const authSubmitBtn = document.getElementById('auth-submit-btn');
 const toggleAuthMode = document.getElementById('toggle-auth-mode');
 const logoutBtn = document.getElementById('logout-btn');
+const exitBtn = document.getElementById('exit-btn');
 const todoForm = document.getElementById('todo-form');
 const todoInput = document.getElementById('todo-input');
 const priorityInput = document.getElementById('priority-input');
@@ -49,20 +50,49 @@ function saveTodos() {
 
 function getUsers() {
     try {
-        return JSON.parse(localStorage.getItem(USERS_KEY) || '{}');
+        const storedUsers = localStorage.getItem(USERS_KEY);
+        const users = storedUsers ? JSON.parse(storedUsers) : {};
+        return users && typeof users === 'object' && !Array.isArray(users) ? users : {};
     } catch (error) {
+        console.error('Không thể đọc danh sách tài khoản:', error);
         return {};
     }
 }
 
 async function hashPassword(password, salt) {
-    const data = new TextEncoder().encode(`${salt}:${password}`);
-    const digest = await crypto.subtle.digest('SHA-256', data);
-    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+    const value = `${salt}:${password}`;
+
+    if (window.crypto && window.crypto.subtle && window.TextEncoder) {
+        const data = new TextEncoder().encode(value);
+        const digest = await crypto.subtle.digest('SHA-256', data);
+        return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+    }
+
+    let hash = 2166136261;
+    for (let index = 0; index < value.length; index += 1) {
+        hash ^= value.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+    }
+    return `fallback-${(hash >>> 0).toString(16).padStart(8, '0')}`;
 }
 
 function createSalt() {
-    return Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, '0')).join('');
+    if (window.crypto && window.crypto.getRandomValues) {
+        return Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, '0')).join('');
+    }
+
+    return `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`;
+}
+
+function saveUsers(users) {
+    try {
+        localStorage.setItem(USERS_KEY, JSON.stringify(users));
+        return true;
+    } catch (error) {
+        console.error('Không thể lưu tài khoản:', error);
+        alert('Không thể lưu tài khoản trên trình duyệt này. Hãy kiểm tra chế độ dữ liệu riêng hoặc bộ nhớ trang.');
+        return false;
+    }
 }
 
 // --- Initialization ---
@@ -70,6 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
     authForm.addEventListener('submit', handleAuth);
     toggleAuthMode.addEventListener('click', toggleAuthenticationMode);
     logoutBtn.addEventListener('click', logout);
+    exitBtn.addEventListener('click', exitApp);
     todoForm.addEventListener('submit', addTodo);
     searchInput.addEventListener('input', renderTodos);
     sortSelect.addEventListener('change', renderTodos);
@@ -96,7 +127,12 @@ function toggleAuthenticationMode() {
 }
 
 function restoreSession() {
-    const savedUser = localStorage.getItem(SESSION_KEY);
+    let savedUser = null;
+    try {
+        savedUser = localStorage.getItem(SESSION_KEY);
+    } catch (error) {
+        console.error('Không thể khôi phục phiên đăng nhập:', error);
+    }
     const users = getUsers();
 
     if (savedUser && users[savedUser]) {
@@ -107,7 +143,12 @@ function restoreSession() {
 function startSession(username) {
     currentUser = username;
     todos = loadTodos(username);
-    localStorage.setItem(SESSION_KEY, username);
+    try {
+        localStorage.setItem(SESSION_KEY, username);
+    } catch (error) {
+        console.error('Không thể lưu phiên đăng nhập:', error);
+        alert('Không thể ghi nhớ đăng nhập trên trình duyệt này.');
+    }
 
     authShell.style.display = 'none';
     appShell.style.display = 'block';
@@ -136,7 +177,7 @@ async function handleAuth(event) {
             salt,
             passwordHash: await hashPassword(password, salt)
         };
-        localStorage.setItem(USERS_KEY, JSON.stringify(users));
+        if (!saveUsers(users)) return;
         startSession(username);
         return;
     }
@@ -151,7 +192,7 @@ async function handleAuth(event) {
         const salt = createSalt();
         users[username].salt = salt;
         users[username].passwordHash = await hashPassword(password, salt);
-        localStorage.setItem(USERS_KEY, JSON.stringify(users));
+        if (!saveUsers(users)) return;
         alert('Mật khẩu cho tài khoản cũ đã được thiết lập.');
         startSession(username);
         return;
@@ -372,10 +413,33 @@ function updateStatistics() {
 }
 
 function logout() {
+    const previousUser = currentUser;
     currentUser = null;
     todos = [];
-    localStorage.removeItem(SESSION_KEY);
+    try {
+        localStorage.removeItem(SESSION_KEY);
+    } catch (error) {
+        console.error('Không thể xóa phiên đăng nhập:', error);
+    }
     authForm.reset();
+    document.getElementById('username-input').value = previousUser || '';
+    authMode = 'login';
+    authSubmitBtn.textContent = 'Đăng nhập';
+    toggleAuthMode.textContent = 'Chưa có tài khoản? Đăng ký';
     authShell.style.display = 'flex';
     appShell.style.display = 'none';
+}
+
+function exitApp() {
+    if (!window.confirm('Bạn có muốn thoát khỏi trang không?')) return;
+
+    window.close();
+
+    // Trình duyệt thường không cho đóng tab do người dùng tự mở.
+    // Khi đó, thay trang bằng trang trống để người dùng thoát khỏi ứng dụng.
+    window.setTimeout(() => {
+        if (!document.hidden) {
+            window.location.replace('about:blank');
+        }
+    }, 100);
 }
