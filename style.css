@@ -329,6 +329,60 @@ body {
   font-weight: 500;
 }
 
+.app-status,
+.sync-status {
+  display: none;
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  background: var(--bg-subtle);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.app-status.is-visible,
+.sync-status.is-visible {
+  display: block;
+}
+
+.app-status.is-error,
+.sync-status.is-error {
+  color: var(--danger);
+  border-color: rgba(239, 68, 68, 0.45);
+  background: var(--danger-soft);
+}
+
+.sync-status {
+  display: block;
+  width: fit-content;
+  padding: 4px 8px;
+  font-size: 0.78rem;
+}
+
+.sync-status:not(.is-visible) {
+  display: none;
+}
+
+.legacy-import {
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle);
+}
+
+.legacy-import p {
+  margin: 0 0 10px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.legacy-import[hidden] {
+  display: none;
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;

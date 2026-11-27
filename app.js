@@ -3,10 +3,10 @@ let currentUser = null;
 let todos = [];
 let authMode = 'login';
 let activeFilter = 'all';
+let supabaseClient = null;
+let loadingUserId = null;
 
-const USERS_KEY = 'todo_users';
-const SESSION_KEY = 'currentUser';
-const tasksKey = (username) => `tasks_${username}`;
+const LEGACY_TASK_PREFIX = 'tasks_';
 
 // --- Selectors ---
 const authShell = document.getElementById('auth-shell');
@@ -24,79 +24,16 @@ const todoList = document.getElementById('todo-list');
 const emptyState = document.getElementById('empty-state');
 const searchInput = document.getElementById('search-input');
 const sortSelect = document.getElementById('sort-select');
-
-// --- Storage ---
-function loadTodos(username) {
-    try {
-        const storedTasks = localStorage.getItem(tasksKey(username));
-        const parsedTasks = storedTasks ? JSON.parse(storedTasks) : [];
-        return Array.isArray(parsedTasks) ? parsedTasks : [];
-    } catch (error) {
-        console.error('Không thể đọc danh sách công việc:', error);
-        return [];
-    }
-}
-
-function saveTodos() {
-    if (!currentUser) return;
-
-    try {
-        localStorage.setItem(tasksKey(currentUser), JSON.stringify(todos));
-    } catch (error) {
-        console.error('Không thể lưu danh sách công việc:', error);
-        alert('Không thể lưu công việc vào trình duyệt của bạn.');
-    }
-}
-
-function getUsers() {
-    try {
-        const storedUsers = localStorage.getItem(USERS_KEY);
-        const users = storedUsers ? JSON.parse(storedUsers) : {};
-        return users && typeof users === 'object' && !Array.isArray(users) ? users : {};
-    } catch (error) {
-        console.error('Không thể đọc danh sách tài khoản:', error);
-        return {};
-    }
-}
-
-async function hashPassword(password, salt) {
-    const value = `${salt}:${password}`;
-
-    if (window.crypto && window.crypto.subtle && window.TextEncoder) {
-        const data = new TextEncoder().encode(value);
-        const digest = await crypto.subtle.digest('SHA-256', data);
-        return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
-    }
-
-    let hash = 2166136261;
-    for (let index = 0; index < value.length; index += 1) {
-        hash ^= value.charCodeAt(index);
-        hash = Math.imul(hash, 16777619);
-    }
-    return `fallback-${(hash >>> 0).toString(16).padStart(8, '0')}`;
-}
-
-function createSalt() {
-    if (window.crypto && window.crypto.getRandomValues) {
-        return Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, '0')).join('');
-    }
-
-    return `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`;
-}
-
-function saveUsers(users) {
-    try {
-        localStorage.setItem(USERS_KEY, JSON.stringify(users));
-        return true;
-    } catch (error) {
-        console.error('Không thể lưu tài khoản:', error);
-        alert('Không thể lưu tài khoản trên trình duyệt này. Hãy kiểm tra chế độ dữ liệu riêng hoặc bộ nhớ trang.');
-        return false;
-    }
-}
+const appStatus = document.getElementById('app-status');
+const syncStatus = document.getElementById('sync-status');
+const legacyImport = document.getElementById('legacy-import');
+const legacySource = document.getElementById('legacy-source');
+const importLegacyButton = document.getElementById('import-legacy-btn');
 
 // --- Initialization ---
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', initializeApp);
+
+function initializeApp() {
     authForm.addEventListener('submit', handleAuth);
     toggleAuthMode.addEventListener('click', toggleAuthenticationMode);
     logoutBtn.addEventListener('click', logout);
@@ -104,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
     todoForm.addEventListener('submit', addTodo);
     searchInput.addEventListener('input', renderTodos);
     sortSelect.addEventListener('change', renderTodos);
+    importLegacyButton.addEventListener('click', importLegacyTodos);
 
     document.querySelectorAll('.filter-tab').forEach((button) => {
         button.addEventListener('click', () => {
@@ -115,132 +53,283 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    const config = window.SUPABASE_CONFIG;
+    if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+        showConfigError('Không tải được thư viện Supabase từ CDN. Hãy kiểm tra kết nối mạng hoặc CDN.');
+        return;
+    }
+    if (!config || typeof config.url !== 'string' || typeof config.anonKey !== 'string'
+        || !config.url || !config.anonKey
+        || config.url.includes('YOUR_') || config.anonKey.includes('YOUR_')) {
+        showConfigError('Chưa cấu hình Supabase. Hãy điền project URL và anon/publishable key trong supabase-config.js.');
+        return;
+    }
+    try {
+        const projectUrl = new URL(config.url);
+        if (!['https:', 'http:'].includes(projectUrl.protocol)) throw new Error('URL không hợp lệ.');
+        supabaseClient = window.supabase.createClient(config.url, config.anonKey);
+    } catch (error) {
+        showConfigError(`Cấu hình Supabase không hợp lệ: ${error.message}`);
+        return;
+    }
+
+    supabaseClient.auth.onAuthStateChange((_event, session) => {
+        window.setTimeout(() => setAuthenticatedUser(session ? session.user : null), 0);
+    });
     restoreSession();
-});
+}
+
+function showConfigError(message) {
+    authSubmitBtn.disabled = true;
+    toggleAuthMode.disabled = true;
+    showStatus(appStatus, message, true);
+}
+
+function showStatus(element, message, isError) {
+    element.textContent = message;
+    element.classList.toggle('is-error', Boolean(isError));
+    element.classList.toggle('is-visible', Boolean(message));
+}
 
 function toggleAuthenticationMode() {
     authMode = authMode === 'login' ? 'register' : 'login';
     authSubmitBtn.textContent = authMode === 'login' ? 'Đăng nhập' : 'Đăng ký';
+    document.getElementById('password-input').autocomplete = authMode === 'login' ? 'current-password' : 'new-password';
     toggleAuthMode.textContent = authMode === 'login'
         ? 'Chưa có tài khoản? Đăng ký'
         : 'Đã có tài khoản? Đăng nhập';
+    showStatus(appStatus, '', false);
 }
 
-function restoreSession() {
-    let savedUser = null;
-    try {
-        savedUser = localStorage.getItem(SESSION_KEY);
-    } catch (error) {
-        console.error('Không thể khôi phục phiên đăng nhập:', error);
+async function restoreSession() {
+    const { data, error } = await supabaseClient.auth.getSession();
+    if (error) {
+        showStatus(appStatus, `Không thể khôi phục phiên Supabase: ${error.message}`, true);
+        return;
     }
-    const users = getUsers();
-
-    if (savedUser && users[savedUser]) {
-        startSession(savedUser);
-    }
+    await setAuthenticatedUser(data.session ? data.session.user : null);
 }
 
-function startSession(username) {
-    currentUser = username;
-    todos = loadTodos(username);
-    try {
-        localStorage.setItem(SESSION_KEY, username);
-    } catch (error) {
-        console.error('Không thể lưu phiên đăng nhập:', error);
-        alert('Không thể ghi nhớ đăng nhập trên trình duyệt này.');
+async function setAuthenticatedUser(user, forceReload) {
+    if (!user) {
+        if (!currentUser) return;
+        currentUser = null;
+        todos = [];
+        loadingUserId = null;
+        authShell.style.display = 'flex';
+        appShell.style.display = 'none';
+        legacyImport.hidden = true;
+        return;
     }
+    if (currentUser && currentUser.id === user.id
+        && (loadingUserId === user.id || (!forceReload && loadingUserId === null))) return;
 
+    currentUser = user;
+    loadingUserId = user.id;
+    todos = [];
     authShell.style.display = 'none';
     appShell.style.display = 'block';
-    document.getElementById('current-user-badge').textContent = `User: ${username}`;
+    document.getElementById('current-user-badge').textContent = user.email || '';
+    todoForm.querySelectorAll('input, select, button').forEach((control) => { control.disabled = true; });
+    showStatus(syncStatus, 'Đang tải công việc từ Supabase…', false);
     renderTodos();
+
+    const { data, error } = await supabaseClient
+        .from('todos')
+        .select('id, text, completed, priority, due_date, created_at')
+        .order('created_at', { ascending: true });
+    if (!currentUser || currentUser.id !== user.id) return;
+    if (error) {
+        loadingUserId = null;
+        emptyState.style.display = 'none';
+        showStatus(syncStatus, `Không tải được dữ liệu. Kiểm tra bảng/RLS trong Supabase rồi tải lại trang: ${error.message}`, true);
+        return;
+    }
+    todos = data.map((row) => ({
+        id: row.id,
+        text: row.text,
+        completed: row.completed,
+        priority: row.priority,
+        dueDate: row.due_date || '',
+        createdAt: row.created_at
+    }));
+    todoForm.querySelectorAll('input, select, button').forEach((control) => { control.disabled = false; });
+    loadingUserId = null;
+    showStatus(syncStatus, 'Đã đồng bộ với Supabase.', false);
+    renderTodos();
+    prepareLegacyImport();
 }
 
 // --- Authentication ---
 async function handleAuth(event) {
     event.preventDefault();
+    if (!supabaseClient) return;
 
-    const username = document.getElementById('username-input').value.trim();
+    const email = document.getElementById('email-input').value.trim();
     const password = document.getElementById('password-input').value;
-    if (!username || !password) return;
+    authSubmitBtn.disabled = true;
+    showStatus(appStatus, authMode === 'login' ? 'Đang đăng nhập…' : 'Đang tạo tài khoản…', false);
 
-    const users = getUsers();
-    if (authMode === 'register') {
-        if (users[username]) {
-            alert('Người dùng đã tồn tại!');
-            return;
-        }
-
-        const salt = createSalt();
-        users[username] = {
-            createdAt: new Date().toISOString(),
-            salt,
-            passwordHash: await hashPassword(password, salt)
-        };
-        if (!saveUsers(users)) return;
-        startSession(username);
+    const result = authMode === 'login'
+        ? await supabaseClient.auth.signInWithPassword({ email, password })
+        : await supabaseClient.auth.signUp({ email, password });
+    authSubmitBtn.disabled = false;
+    if (result.error) {
+        showStatus(appStatus, `Không thể ${authMode === 'login' ? 'đăng nhập' : 'đăng ký'}: ${result.error.message}`, true);
         return;
     }
+    if (authMode === 'register' && !result.data.session) {
+        showStatus(appStatus, 'Đăng ký thành công. Hãy xác nhận email theo thư Supabase gửi đến bạn, rồi đăng nhập.', false);
+    } else {
+        showStatus(appStatus, '', false);
+    }
+}
 
-    if (!users[username]) {
-        alert('Tên đăng nhập không tồn tại. Hãy đăng ký tài khoản trước.');
+async function logout() {
+    const { error } = await supabaseClient.auth.signOut();
+    if (error) showStatus(syncStatus, `Không thể đăng xuất: ${error.message}`, true);
+}
+
+function getLegacyTasks(storageKey) {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        return Array.isArray(parsed) ? parsed.filter((task) => task && typeof task.text === 'string' && task.text.trim()) : [];
+    } catch (error) {
+        console.error('Không thể đọc dữ liệu cũ:', error);
+        return [];
+    }
+}
+
+function prepareLegacyImport() {
+    legacySource.replaceChildren();
+    let keys = [];
+    try {
+        keys = Object.keys(localStorage).filter((key) => key.startsWith(LEGACY_TASK_PREFIX));
+    } catch (error) {
+        showStatus(syncStatus, 'Trình duyệt không cho phép đọc dữ liệu cũ để nhập.', true);
         return;
     }
-
-    // Tài khoản tạo bởi bản trước chưa có mật khẩu: thiết lập mật khẩu ở lần đăng nhập đầu tiên.
-    if (!users[username].passwordHash) {
-        const salt = createSalt();
-        users[username].salt = salt;
-        users[username].passwordHash = await hashPassword(password, salt);
-        if (!saveUsers(users)) return;
-        alert('Mật khẩu cho tài khoản cũ đã được thiết lập.');
-        startSession(username);
+    let options = [];
+    try {
+        options = keys.map((key) => ({ key, tasks: getLegacyTasks(key) }))
+            .filter((source) => source.tasks.length && !localStorage.getItem(`todo_imported_${currentUser.id}_${source.key}`));
+    } catch (error) {
+        showStatus(syncStatus, 'Không thể kiểm tra trạng thái nhập dữ liệu cũ trong bộ nhớ trình duyệt.', true);
         return;
     }
+    options.forEach((source) => {
+        const option = document.createElement('option');
+        option.value = source.key;
+        option.textContent = `${source.key.slice(LEGACY_TASK_PREFIX.length)} (${source.tasks.length} công việc)`;
+        legacySource.append(option);
+    });
+    legacyImport.hidden = options.length === 0;
+}
 
-    const passwordHash = await hashPassword(password, users[username].salt);
-    if (passwordHash !== users[username].passwordHash) {
-        alert('Sai mật khẩu!');
+async function importLegacyTodos() {
+    if (!currentUser || !legacySource.value) return;
+    const storageKey = legacySource.value;
+    const oldName = storageKey.slice(LEGACY_TASK_PREFIX.length);
+    const tasks = getLegacyTasks(storageKey);
+    if (!tasks.length) {
+        showStatus(syncStatus, 'Danh sách cũ không có công việc hợp lệ để nhập.', true);
         return;
     }
+    if (!window.confirm(`Nhập ${tasks.length} công việc từ danh sách “${oldName}” vào tài khoản ${currentUser.email}? Dữ liệu cũ sẽ được giữ nguyên trên trình duyệt này.`)) return;
 
-    startSession(username);
+    importLegacyButton.disabled = true;
+    const rows = tasks.map((task) => ({
+        user_id: currentUser.id,
+        text: task.text.trim(),
+        completed: Boolean(task.completed),
+        priority: ['low', 'medium', 'high'].includes(task.priority) ? task.priority : 'medium',
+        due_date: /^\d{4}-\d{2}-\d{2}$/.test(task.dueDate || '') ? task.dueDate : null,
+        created_at: task.createdAt && !Number.isNaN(Date.parse(task.createdAt)) ? task.createdAt : new Date().toISOString()
+    }));
+    const { error } = await supabaseClient.from('todos').insert(rows);
+    importLegacyButton.disabled = false;
+    if (error) {
+        showStatus(syncStatus, `Không nhập được dữ liệu cũ: ${error.message}`, true);
+        return;
+    }
+    try {
+        localStorage.setItem(`todo_imported_${currentUser.id}_${storageKey}`, 'true');
+    } catch (storageError) {
+        console.error('Không thể ghi dấu dữ liệu đã nhập:', storageError);
+        showStatus(syncStatus, 'Đã nhập dữ liệu nhưng không lưu được dấu nhập trên trình duyệt. Tránh nhập lại để không tạo bản sao.', true);
+    }
+    await setAuthenticatedUser(currentUser, true);
 }
 
 // --- Todo logic ---
-function addTodo(event) {
+async function addTodo(event) {
     event.preventDefault();
     const text = todoInput.value.trim();
-    if (!text) return;
+    if (!text || !currentUser || loadingUserId) return;
 
-    todos.push({
-        id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    const row = {
+        user_id: currentUser.id,
         text,
         completed: false,
         priority: priorityInput.value,
-        dueDate: dueDateInput.value,
-        createdAt: new Date().toISOString()
-    });
+        due_date: dueDateInput.value || null
+    };
+    const submitButton = todoForm.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
+    const { data, error } = await supabaseClient.from('todos').insert(row)
+        .select('id, text, completed, priority, due_date, created_at').single();
+    submitButton.disabled = false;
+    if (error) {
+        showStatus(syncStatus, `Không lưu được công việc: ${error.message}`, true);
+        return;
+    }
 
+    todos.push({
+        id: data.id,
+        text: data.text,
+        completed: data.completed,
+        priority: data.priority,
+        dueDate: data.due_date || '',
+        createdAt: data.created_at
+    });
     todoInput.value = '';
     priorityInput.value = 'medium';
     dueDateInput.value = '';
-    saveTodos();
+    showStatus(syncStatus, 'Đã lưu và đồng bộ công việc.', false);
     renderTodos();
 }
 
-function toggleTodo(id) {
+async function toggleTodo(id) {
     const todo = todos.find((item) => item.id === id);
-    if (!todo) return;
+    if (!todo || !currentUser) return;
 
-    todo.completed = !todo.completed;
-    saveTodos();
+    const completed = !todo.completed;
+    const { error } = await supabaseClient.from('todos')
+        .update({ completed })
+        .eq('id', id)
+        .eq('user_id', currentUser.id);
+    if (error) {
+        showStatus(syncStatus, `Không cập nhật được công việc: ${error.message}`, true);
+        renderTodos();
+        return;
+    }
+    todo.completed = completed;
+    showStatus(syncStatus, 'Đã đồng bộ thay đổi.', false);
     renderTodos();
 }
 
-function deleteTodo(id) {
+async function deleteTodo(id) {
+    if (!currentUser) return;
+    const { error } = await supabaseClient.from('todos')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', currentUser.id);
+    if (error) {
+        showStatus(syncStatus, `Không xóa được công việc: ${error.message}`, true);
+        return;
+    }
     todos = todos.filter((item) => item.id !== id);
-    saveTodos();
+    showStatus(syncStatus, 'Đã xóa và đồng bộ công việc.', false);
     renderTodos();
 }
 
@@ -410,24 +499,6 @@ function updateStatistics() {
     document.getElementById('stat-overdue').textContent = overdue;
     document.getElementById('progress-percent').textContent = `${percentage}%`;
     document.getElementById('progress-fill').style.width = `${percentage}%`;
-}
-
-function logout() {
-    const previousUser = currentUser;
-    currentUser = null;
-    todos = [];
-    try {
-        localStorage.removeItem(SESSION_KEY);
-    } catch (error) {
-        console.error('Không thể xóa phiên đăng nhập:', error);
-    }
-    authForm.reset();
-    document.getElementById('username-input').value = previousUser || '';
-    authMode = 'login';
-    authSubmitBtn.textContent = 'Đăng nhập';
-    toggleAuthMode.textContent = 'Chưa có tài khoản? Đăng ký';
-    authShell.style.display = 'flex';
-    appShell.style.display = 'none';
 }
 
 function exitApp() {

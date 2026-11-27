@@ -11,18 +11,19 @@
         <div class="todo-card auth-card">
             <header class="card-header">
                 <h1>Chào mừng trở lại</h1>
-                <p class="subtitle">Đăng nhập để quản lý công việc của bạn</p>
+                <p class="subtitle">Đăng nhập bằng email để đồng bộ công việc trên các thiết bị</p>
             </header>
             <section class="composer-section">
                 <form id="auth-form" class="todo-form">
                     <div class="input-group">
-                        <input type="text" id="username-input" class="todo-input" placeholder="Tên đăng nhập" required autocomplete="username">
+                        <input type="email" id="email-input" class="todo-input" placeholder="Địa chỉ email" required autocomplete="email">
                     </div>
                     <div class="input-group">
-                        <input type="password" id="password-input" class="todo-input" placeholder="Mật khẩu" required autocomplete="current-password">
+                        <input type="password" id="password-input" class="todo-input" placeholder="Mật khẩu (ít nhất 6 ký tự)" required minlength="6" autocomplete="current-password">
                     </div>
                     <button type="submit" id="auth-submit-btn" class="btn btn-primary">Đăng nhập</button>
                 </form>
+                <p id="app-status" class="app-status" role="status" aria-live="polite"></p>
                 <div class="auth-footer" style="margin-top: 15px;">
                     <button type="button" id="toggle-auth-mode" class="btn btn-ghost-danger btn-sm">Chưa có tài khoản? Đăng ký</button>
                 </div>
@@ -38,6 +39,7 @@
                         <span class="badge-eyebrow">Danh sách cá nhân</span>
                         <h1>Công việc của tôi</h1>
                         <p class="subtitle">Quản lý hiệu quả mỗi ngày</p>
+                        <p id="sync-status" class="sync-status" role="status" aria-live="polite">Đang tải công việc…</p>
                     </div>
                     <div class="header-actions">
                         <span id="current-user-badge" style="font-size: 0.8rem; color: var(--text-secondary); margin-right: 10px;"></span>
@@ -61,6 +63,13 @@
             </header>
 
             <section class="composer-section">
+                <div id="legacy-import" class="legacy-import" hidden>
+                    <p>Có dữ liệu cũ chỉ lưu trên trình duyệt này. Chọn danh sách để nhập vào tài khoản đang đăng nhập; tên cũ không được dùng làm email.</p>
+                    <div class="input-group">
+                        <select id="legacy-source" class="todo-input" aria-label="Danh sách công việc cũ"></select>
+                        <button type="button" id="import-legacy-btn" class="btn btn-outline">Nhập dữ liệu cũ</button>
+                    </div>
+                </div>
                 <form id="todo-form" class="todo-form">
                     <div class="input-group">
                         <input type="text" id="todo-input" class="todo-input" placeholder="Bạn cần làm gì tiếp theo?" required>
@@ -117,6 +126,8 @@
             </main>
         </div>
     </div>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
